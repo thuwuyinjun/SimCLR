@@ -108,6 +108,8 @@ def validate(test_loader, model, linear_classifier, criterion, epoch, args):
         print("test accuracy::", test_acc)
         print("test loss::", test_loss)
 
+    return test_acc
+
 def train_classifer(train_loader, valid_loader, test_loader, model, criterion, args):
 
     linear_classifier = Linear_classify(args.feature_dim, args.num_classes)
@@ -119,15 +121,26 @@ def train_classifer(train_loader, valid_loader, test_loader, model, criterion, a
     else:
         optimizer = torch.optim.Adam(linear_classifier.parameters(), args.lr, weight_decay=args.weight_decay)
 
+    best_valid_acc = 0
+    best_test_acc = 0
     for epoch in range(args.epochs):
         train_classifer_one_epoch(train_loader, model, linear_classifier, criterion, optimizer, epoch, args)    
 
         
         print("Validation performance at epoch ", epoch)
-        validate(valid_loader, model, linear_classifier, criterion, epoch, args)
+        valid_acc = validate(valid_loader, model, linear_classifier, criterion, epoch, args)
+
+        
+
 
         print("Test performance at epoch ", epoch)
-        validate(test_loader, model, linear_classifier, criterion, epoch, args)
+        test_acc = validate(test_loader, model, linear_classifier, criterion, epoch, args)
+
+        if valid_acc >= best_valid_acc:
+            best_valid_acc = valid_acc
+            best_test_acc = test_acc
+
+        print("Best Test performance so far::", best_test_acc)
 
 def train_classifer_one_epoch(train_loader, model, linear_classifier, criterion, optimizer, epoch, args):
     """one epoch training"""

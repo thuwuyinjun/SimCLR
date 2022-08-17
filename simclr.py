@@ -75,9 +75,13 @@ class SimCLR(object):
 
         for epoch_counter in range(self.args.epochs):
             for _,images, _ in tqdm(train_loader):
-                images = torch.cat(images, dim=0)
+                # images = torch.cat(images, dim=0)
 
-                images = images.to(self.args.device)
+                # images = images.to(self.args.device)
+                image_ls = []
+                for idx in range(self.args.n_views):
+                    image_ls.append(images[idx].to(self.args.device))
+                images = torch.cat(image_ls, dim=0)
 
                 with autocast(enabled=self.args.fp16_precision):
                     features = self.model(images)
@@ -137,9 +141,13 @@ class SimCLR(object):
         for epoch_counter in range(self.args.epochs):
 
             for train_ids, images, _ in tqdm(train_loader):
-                images = torch.cat(images, dim=0)
 
-                images = images.to(self.args.device)
+                image_ls = []
+                for idx in range(self.args.n_views):
+                    image_ls.append(images[idx].to(self.args.device))
+                images = torch.cat(image_ls, dim=0)
+
+                # images = images.to(self.args.device)
 
                 w_array.requires_grad = True
 
@@ -161,9 +169,14 @@ class SimCLR(object):
 
                     meta_images = meta_inputs[1]
 
-                    meta_images = torch.cat(meta_images, dim=0)
+                    meta_image_ls = []
+                    for idx in range(self.args.n_views):
+                        meta_image_ls.append(meta_images[idx].to(self.args.device))
+                    meta_images = torch.cat(meta_image_ls, dim=0)
 
-                    meta_images = meta_images.to(self.args.device)
+                    # meta_images = torch.cat(meta_images, dim=0)
+
+                    # meta_images = meta_images.to(self.args.device)
 
                     with autocast(enabled=self.args.fp16_precision):
 

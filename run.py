@@ -6,7 +6,9 @@ from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset, su
 from models.resnet_simclr import ResNetSimCLR
 from simclr import SimCLR
 from torch.utils.data import RandomSampler
-
+from tqdm import tqdm
+from models.resnet_simclr import Linear_classify
+from utils import load_checkpoint
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
@@ -54,6 +56,14 @@ parser.add_argument('--n-views', default=2, type=int, metavar='N',
 parser.add_argument('--gpu-index', default=0, type=int, help='Gpu index.')
 
 
+# cached_model_name
+
+parser.add_argument('--cached_model_name', default=None, type=str,
+                    help='initial learning rate')
+
+parser.add_argument('--test', action='store_true',
+                    help='Disable CUDA')
+
 # args.output_dir
 
 parser.add_argument('--output_dir', default=None, type=str,
@@ -64,6 +74,107 @@ parser.add_argument('--meta_lr', default=20, type=float,
 
 parser.add_argument('--meta', action='store_true',
                     help='initial learning rate')
+
+def validate(test_loader, model, linear_classifier, criterion, epoch, args):
+    model.eval()
+    linear_classifier.eval()
+
+    with torch.no_grad():
+        total_loss = 0
+        total_count = 0
+        correct_count = 0
+        for _, images, labels in tqdm(test_loader):
+            if type(images) is tuple:
+                images = images[0]
+            images = images.to(args.device)
+            model_feature = model(images)
+            model_out = linear_classifier(model_feature)
+            total_count += images.shape[0]
+            pred_labels = model_out.max(1)[0]
+            correct_count += torch.sum(labels.view(-1) == pred_labels.view(-1)).item()
+            loss = criterion(model_out, labels)
+            total_loss += loss.item()
+        test_acc = correct_count/total_count
+        test_loss = total_loss/total_count
+
+        
+        print("test accuracy::", test_acc)
+        print("test loss::", test_loss)
+
+def train_classifer(train_loader, valid_loader, test_loader, model, criterion, args):
+
+    linear_classifier = Linear_classify(model.fc.out_dim, args.num_classes)
+
+    if args.joint_training:
+        optimizer = torch.optim.Adam(list(model.parameters()) + list(linear_classifier.parameters()), args.lr, weight_decay=args.weight_decay)
+    else:
+        optimizer = torch.optim.Adam(linear_classifier.parameters(), args.lr, weight_decay=args.weight_decay)
+
+    for epoch in range(args.epochs):
+        train_classifer_one_epoch(train_loader, model, linear_classifier, criterion, optimizer, epoch, args)    
+
+        
+        print("Validation performance at epoch ", epoch)
+        validate(valid_loader, model, linear_classifier, criterion, epoch, args)
+
+        print("Test performance at epoch ", epoch)
+        validate(test_loader, model, linear_classifier, criterion, epoch, args)
+
+def train_classifer_one_epoch(train_loader, model, linear_classifier, criterion, optimizer, epoch, args):
+    """one epoch training"""
+    model.train()
+    linear_classifier.train()
+    # classifier.train()
+
+    # batch_time = AverageMeter()
+    # data_time = AverageMeter()
+    # losses = AverageMeter()
+    # losses1 = AverageMeter()
+    # losses2 = AverageMeter()
+    # top1 = AverageMeter()
+
+    # end = time.time()
+    # for idx, items in enumerate(train_loader):
+    correct_items = 0
+    total_items = 0
+    total_loss = 0
+    for train_ids, images, labels in tqdm(train_loader):
+        # image_ls = []
+        # for idx in range(args.n_views):
+        #     image_ls.append(images[idx].to(args.device))
+        # images = torch.cat(image_ls, dim=0)
+        images = images[0]
+        images = images.to(args.device)
+        labels = labels.to(args.device)
+
+        if args.joint_training:
+            with torch.no_grad():
+                model_feature = model(images)
+        else:
+            model_feature = model(images)
+
+        model_out = linear_classifier(model_feature)
+
+        pred_labels = model_out.max(1)[0]
+
+        loss = criterion(model_out, labels)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+        correct_items += torch.sum(labels.view(-1) == pred_labels.view(-1)).detach().cpu().item()
+        total_items += labels.view(-1).shape[0]
+        # optimizer.second_step(zero_grad=True)
+
+    average_loss = total_loss/total_items
+    train_acc = correct_items/total_items
+    print("training performance at epoch ", epoch)
+    print("average train loss::", average_loss)
+    print("average train accuracy::", train_acc)
+
+
+
+
+
 
 def main():
     args = parser.parse_args()
@@ -79,7 +190,14 @@ def main():
 
     dataset = ContrastiveLearningDataset(args.data)
 
-    train_dataset = dataset.get_dataset(args.dataset_name, args.n_views)
+    if not args.test:
+        train_dataset = dataset.get_dataset(args.dataset_name, args.n_views)
+
+        test_dataset = None
+    else:
+        train_dataset = dataset.get_eval_dataset(args.dataset_name, True)
+
+        test_dataset = dataset.get_eval_dataset(args.dataset_name, False)
 
     train_dataset, valid_dataset = subset_cifar(train_dataset)
 
@@ -92,6 +210,9 @@ def main():
 
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset, batch_size=args.batch_size, shuffle=(meta_sampler is None),pin_memory=True, sampler = meta_sampler)
+
+    if test_dataset is not None:
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
 
     # valid_loader = torch.utils.data.DataLoader(
@@ -106,12 +227,18 @@ def main():
                                                            last_epoch=-1)
 
     #  It’s a no-op if the 'gpu_index' argument is a negative integer or None.
-    with torch.cuda.device(args.gpu_index):
-        simclr = SimCLR(model=model, optimizer=optimizer, scheduler=scheduler, args=args)
-        if not args.meta:
-            simclr.train(train_loader)
-        else:
-            simclr.meta_train(train_loader, valid_loader)
+    if not args.test:
+        with torch.cuda.device(args.gpu_index):
+            simclr = SimCLR(model=model, optimizer=optimizer, scheduler=scheduler, args=args)
+            if not args.meta:
+                simclr.train(train_loader)
+            else:
+                simclr.meta_train(train_loader, valid_loader)
+    else:
+        load_checkpoint(model, filename=args.cached_model_name)
+        criterion = torch.nn.CrossEntropyLoss().to(args.device)
+        train_classifer(train_loader, valid_loader, test_loader, model, criterion, args)
+
 
 
 if __name__ == "__main__":

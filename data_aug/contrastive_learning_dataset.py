@@ -182,6 +182,13 @@ class ContrastiveLearningDataset:
                                               transforms.ToTensor()])
         return data_transforms
 
+    @staticmethod
+    def get_test_transform(size):
+        """Return a set of data augmentation transformations as described in the SimCLR paper."""
+        # color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
+        data_transforms = transforms.Compose([transforms.Resize(size), transforms.ToTensor()])
+        return data_transforms
+
     def get_dataset(self, name, n_views):
         valid_datasets = {'cifar10': lambda: datasets.CIFAR10(self.root_folder, train=True,
                                                               transform=ContrastiveLearningViewGenerator(
@@ -193,6 +200,35 @@ class ContrastiveLearningDataset:
                                                           transform=ContrastiveLearningViewGenerator(
                                                               self.get_simclr_pipeline_transform(96),
                                                               n_views),
+                                                          download=True)}
+
+        try:
+            dataset_fn = valid_datasets[name]
+        except KeyError:
+            raise InvalidDatasetSelection()
+        else:
+            return_dataset=dataset_fn()
+            if name == 'cifar10':
+                labels = return_dataset.targets
+                data = np.copy(return_dataset.data)
+            elif name == 'stl10':
+                labels = return_dataset.labels
+                data = np.transpose(return_dataset.data, (0,2,3,1))
+
+                # data = np.copy(return_dataset.data)
+
+
+            return_dataset = dataset_wrapper(data, np.copy(labels), return_dataset.transforms)
+            return return_dataset
+
+    def get_eval_dataset(self, name, train=True):
+
+        valid_datasets = {'cifar10': lambda: datasets.CIFAR10(self.root_folder, train=train,
+                                                              transform=transforms.ToTensor(),
+                                                              download=True),
+
+                          'stl10': lambda: datasets.STL10(self.root_folder, split=True,
+                                                          transform=transforms.ToTensor(),
                                                           download=True)}
 
         try:

@@ -6,6 +6,19 @@ from exceptions.exceptions import InvalidBackboneError
 import torch.nn.functional as F
 
 import torch
+
+class Linear_classify(nn.Module):
+    def __init__(self, feature_dim, num_classes):
+        super(Linear_classify, self).__init__()
+        self.layer1 = nn.Linear(feature_dim, feature_dim)
+        self.layer2 = nn.Linear(feature_dim, num_classes)
+    def forward(self, x):
+        x = self.layer1(x)
+        x = F.relu(x)
+        x = self.layer2(x)
+        return x
+
+
 class ResNetSimCLR(nn.Module):
 
     def __init__(self, base_model, out_dim):

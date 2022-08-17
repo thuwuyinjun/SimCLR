@@ -215,7 +215,7 @@ class SimCLR(object):
                     
                     w_array[train_ids] = torch.clamp(w_array[train_ids], max=1, min=1e-7)
 
-                del eps, eps_grads, meta_images, meta_features, meta_logits,  meta_loss, meta_model
+                del eps, eps_grads, meta_images, meta_features, meta_logits,  meta_model
 
                 with autocast(enabled=self.args.fp16_precision):
                     features = self.model(images)
@@ -244,7 +244,7 @@ class SimCLR(object):
             # warmup for the first 10 epochs
             if epoch_counter >= 10:
                 self.scheduler.step()
-            logging.debug(f"Epoch: {epoch_counter}\tLoss: {loss}\tTop1 accuracy: {top1[0]}")
+            logging.debug(f"Epoch: {epoch_counter}\tLoss: {loss.detach().item()}\tValid loss:{meta_loss.detach().item()}\tTop1 accuracy: {top1[0]}")
             checkpoint_name = 'checkpoint_epoch_{:04d}.pth.tar'.format(epoch_counter)
             save_checkpoint({
                 'epoch': epoch_counter,

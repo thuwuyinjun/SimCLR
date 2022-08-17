@@ -104,6 +104,17 @@ class SimCLR(object):
 
                 n_iter += 1
 
+            checkpoint_name = 'checkpoint_epoch_{:04d}.pth.tar'.format(epoch_counter)
+            save_checkpoint({
+                'epoch': epoch_counter,
+                'arch': self.args.arch,
+                'state_dict': self.model.state_dict(),
+                'optimizer': self.optimizer.state_dict(),
+            }, is_best=False, filename=os.path.join(self.writer.log_dir, checkpoint_name))
+            logging.info(f"Model checkpoint and metadata has been saved at {self.writer.log_dir}.")
+
+
+
             # warmup for the first 10 epochs
             if epoch_counter >= 10:
                 self.scheduler.step()

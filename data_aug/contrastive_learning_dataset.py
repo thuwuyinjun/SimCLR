@@ -223,11 +223,16 @@ class ContrastiveLearningDataset:
 
     def get_eval_dataset(self, name, train=True):
 
+        if train:
+            train_str= "train"
+        else:
+            train_ste="test"
+
         valid_datasets = {'cifar10': lambda: datasets.CIFAR10(self.root_folder, train=train,
                                                               transform=transforms.ToTensor(),
                                                               download=True),
 
-                          'stl10': lambda: datasets.STL10(self.root_folder, split=True,
+                          'stl10': lambda: datasets.STL10(self.root_folder, split=train_str,
                                                           transform=transforms.ToTensor(),
                                                           download=True)}
 

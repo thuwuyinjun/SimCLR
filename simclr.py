@@ -261,7 +261,7 @@ class SimCLR(object):
             # warmup for the first 10 epochs
             if epoch_counter >= 10:
                 self.scheduler.step()
-            logging.debug(f"Epoch: {epoch_counter}\tLoss: {total_train_loss.detach().item()}\tValid loss:{total_meta_loss.detach().item()}\tTop1 accuracy: {total_top1}")
+            logging.debug(f"Epoch: {epoch_counter}\tLoss: {total_train_loss}\tValid loss:{total_meta_loss}\tTop1 accuracy: {total_top1}")
             checkpoint_name = 'checkpoint_epoch_{:04d}.pth.tar'.format(epoch_counter)
             save_checkpoint({
                 'epoch': epoch_counter,

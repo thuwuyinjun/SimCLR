@@ -75,6 +75,12 @@ parser.add_argument('--meta_lr', default=20, type=float,
 parser.add_argument('--meta', action='store_true',
                     help='initial learning rate')
 
+parser.add_argument('--joint_training', action='store_true',
+                    help='initial learning rate')
+
+
+# joint_training
+
 def validate(test_loader, model, linear_classifier, criterion, epoch, args):
     model.eval()
     linear_classifier.eval()
@@ -87,11 +93,12 @@ def validate(test_loader, model, linear_classifier, criterion, epoch, args):
             if type(images) is tuple:
                 images = images[0]
             images = images.to(args.device)
+            labels = labels.to(args.device)
             model_feature = model(images)
             model_out = linear_classifier(model_feature)
             total_count += images.shape[0]
-            pred_labels = model_out.max(1)[0]
-            correct_count += torch.sum(labels.view(-1) == pred_labels.view(-1)).item()
+            pred_labels = model_out.max(1)[1]
+            correct_count += torch.sum(labels.view(-1) == pred_labels.view(-1)).detach().cpu().item()
             loss = criterion(model_out, labels)
             total_loss += loss.item()
         test_acc = correct_count/total_count
@@ -103,7 +110,9 @@ def validate(test_loader, model, linear_classifier, criterion, epoch, args):
 
 def train_classifer(train_loader, valid_loader, test_loader, model, criterion, args):
 
-    linear_classifier = Linear_classify(model.fc.out_dim, args.num_classes)
+    linear_classifier = Linear_classify(args.feature_dim, args.num_classes)
+
+    linear_classifier = linear_classifier.to(args.device)
 
     if args.joint_training:
         optimizer = torch.optim.Adam(list(model.parameters()) + list(linear_classifier.parameters()), args.lr, weight_decay=args.weight_decay)
@@ -143,11 +152,11 @@ def train_classifer_one_epoch(train_loader, model, linear_classifier, criterion,
         # for idx in range(args.n_views):
         #     image_ls.append(images[idx].to(args.device))
         # images = torch.cat(image_ls, dim=0)
-        images = images[0]
+        # images = images[0]
         images = images.to(args.device)
         labels = labels.to(args.device)
 
-        if args.joint_training:
+        if not args.joint_training:
             with torch.no_grad():
                 model_feature = model(images)
         else:
@@ -155,7 +164,7 @@ def train_classifer_one_epoch(train_loader, model, linear_classifier, criterion,
 
         model_out = linear_classifier(model_feature)
 
-        pred_labels = model_out.max(1)[0]
+        pred_labels = model_out.max(1)[1]
 
         loss = criterion(model_out, labels)
         loss.backward()
@@ -213,6 +222,9 @@ def main():
 
     if test_dataset is not None:
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    
+    if args.test:
+        valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False)
 
 
     # valid_loader = torch.utils.data.DataLoader(
@@ -220,6 +232,13 @@ def main():
     #     num_workers=args.workers, pin_memory=True, drop_last=True)
 
     model = ResNetSimCLR(base_model=args.arch, out_dim=args.out_dim)
+
+    if args.test:
+        load_checkpoint(model, filename=args.cached_model_name)
+        args.num_classes = 10
+        args.feature_dim = list(model.backbone.fc)[0].in_features
+        model.backbone.fc = torch.nn.Identity()
+        # model.fc = torch.nn.Linear(model.backbone.fc.in_features, args.num_classes)
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
 
@@ -235,8 +254,10 @@ def main():
             else:
                 simclr.meta_train(train_loader, valid_loader)
     else:
-        load_checkpoint(model, filename=args.cached_model_name)
+        
+        
         criterion = torch.nn.CrossEntropyLoss().to(args.device)
+        model = model.to(args.device)
         train_classifer(train_loader, valid_loader, test_loader, model, criterion, args)
 
 

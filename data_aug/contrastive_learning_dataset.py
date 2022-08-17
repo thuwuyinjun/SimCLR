@@ -226,7 +226,7 @@ class ContrastiveLearningDataset:
         if train:
             train_str= "train"
         else:
-            train_ste="test"
+            train_str="test"
 
         valid_datasets = {'cifar10': lambda: datasets.CIFAR10(self.root_folder, train=train,
                                                               transform=transforms.ToTensor(),

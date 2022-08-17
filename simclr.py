@@ -151,6 +151,12 @@ class SimCLR(object):
 
         for epoch_counter in range(self.args.epochs):
 
+            total_train_loss = 0
+
+            total_meta_loss = 0
+
+            total_top1 = 0
+
             for train_ids, images, _ in tqdm(train_loader):
 
                 image_ls = []
@@ -225,6 +231,10 @@ class SimCLR(object):
 
                     loss = torch.mean(self.criterion(logits, labels)*w_array[train_ids].view(-1))
 
+                total_train_loss += loss.cpu().detach().item()
+                total_meta_loss += meta_loss.cpu().detach().item()
+                
+
                 self.optimizer.zero_grad()
 
                 scaler.scale(loss).backward()
@@ -232,19 +242,26 @@ class SimCLR(object):
                 scaler.step(self.optimizer)
                 scaler.update()
 
+                top1, top5 = accuracy(logits, labels, topk=(1, 5))
+
                 if n_iter % self.args.log_every_n_steps == 0:
-                    top1, top5 = accuracy(logits, labels, topk=(1, 5))
+                    
                     self.writer.add_scalar('loss', loss, global_step=n_iter)
                     self.writer.add_scalar('acc/top1', top1[0], global_step=n_iter)
                     self.writer.add_scalar('acc/top5', top5[0], global_step=n_iter)
                     self.writer.add_scalar('learning_rate', self.scheduler.get_lr()[0], global_step=n_iter)
+                total_top1 += top1[0]
 
                 n_iter += 1
+
+            total_train_loss = total_train_loss/len(train_loader)
+            total_meta_loss = total_meta_loss/len(train_loader)
+            total_top1 = total_top1/len(train_loader)
 
             # warmup for the first 10 epochs
             if epoch_counter >= 10:
                 self.scheduler.step()
-            logging.debug(f"Epoch: {epoch_counter}\tLoss: {loss.detach().item()}\tValid loss:{meta_loss.detach().item()}\tTop1 accuracy: {top1[0]}")
+            logging.debug(f"Epoch: {epoch_counter}\tLoss: {total_train_loss.detach().item()}\tValid loss:{total_meta_loss.detach().item()}\tTop1 accuracy: {total_top1}")
             checkpoint_name = 'checkpoint_epoch_{:04d}.pth.tar'.format(epoch_counter)
             save_checkpoint({
                 'epoch': epoch_counter,

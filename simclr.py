@@ -15,6 +15,54 @@ import torch_higher as higher
 torch.manual_seed(0)
 
 
+
+
+def obtain_model_grad(model):
+    grad_ls = []
+    for param in model.parameters():
+        if param.grad is not None:
+            grad_ls.append(param.grad.detach().clone())
+    return grad_ls
+
+
+def update_model_by_small_grad(model, model_grad_ls, eps):
+    param_ls = list(model.parameters())
+    for idx in range(len(param_ls)):
+        param = param_ls[idx]
+        param.data += eps*model_grad_ls[idx]
+
+
+def compute_loss(sim_clr, model, images, criterion, labels):
+    model_feat = model(images)
+    logits, _ = sim_clr.info_nce_loss(model_feat)
+    loss = criterion(logits, labels)
+    return loss
+
+
+def compute_meta_grad_efficient(sim_clr, model, train_images, train_labels, meta_images, meta_labels, criterion, optimizer, eps = 1e-6):
+    # meta_out = model(meta_images)
+    optimizer.zero_grad()
+    meta_loss = compute_loss(sim_clr, model, meta_images, criterion, meta_labels)
+    # meta_loss = criterion(meta_out, meta_labels)
+    meta_loss.backward()
+    meta_model_grad = obtain_model_grad(model)
+    
+    criterion.reduction = 'none'
+
+    train_loss1 = compute_loss(sim_clr, model, train_images, criterion, train_labels)
+    # train_out = model(train_images)
+    # train_loss1 = criterion(train_out, train_labels)
+
+    update_model_by_small_grad(model, meta_model_grad, eps)
+
+    train_loss2 = compute_loss(sim_clr, model, train_images, criterion, train_labels)
+    # train_out = model(train_images)
+    # train_loss2 = criterion(train_out, train_labels)
+
+    train_weight_grad = (train_loss2 - train_loss1)/(eps*len(train_images))
+
+    return train_weight_grad
+
 class SimCLR(object):
 
     def __init__(self, *args, **kwargs):
@@ -130,7 +178,7 @@ class SimCLR(object):
             'optimizer': self.optimizer.state_dict(),
         }, is_best=False, filename=os.path.join(self.writer.log_dir, checkpoint_name))
         logging.info(f"Model checkpoint and metadata has been saved at {self.writer.log_dir}.")
-
+    
     def meta_train(self, train_loader, metaloader):
 
         scaler = GradScaler(enabled=self.args.fp16_precision)
@@ -206,6 +254,9 @@ class SimCLR(object):
                         meta_logits, _ = self.info_nce_loss(meta_features)
 
                         meta_loss = self.criterion(meta_logits, labels)
+
+                    eps_grads2 = compute_meta_grad_efficient(self, self.model, images, labels, meta_images, labels, self.criterion, self.optimizer)
+
 
                     eps_grads = torch.autograd.grad(scaler.scale(meta_loss), eps)[0].detach()
 

@@ -1,0 +1,30 @@
+INFO:root:Start SimCLR training for 100 epochs.
+INFO:root:Training with gpu: False.
+DEBUG:root:Epoch: 0	Loss: 4.438902854919434	Top1 accuracy: 17.3828125
+DEBUG:root:Epoch: 1	Loss: 3.0080859661102295	Top1 accuracy: 38.671875
+DEBUG:root:Epoch: 2	Loss: 2.5611603260040283	Top1 accuracy: 47.8515625
+DEBUG:root:Epoch: 3	Loss: 2.2360072135925293	Top1 accuracy: 55.859375
+DEBUG:root:Epoch: 4	Loss: 1.9713876247406006	Top1 accuracy: 58.984375
+DEBUG:root:Epoch: 5	Loss: 1.9181870222091675	Top1 accuracy: 60.7421875
+DEBUG:root:Epoch: 6	Loss: 2.063565731048584	Top1 accuracy: 59.1796875
+DEBUG:root:Epoch: 7	Loss: 1.6564927101135254	Top1 accuracy: 66.40625
+DEBUG:root:Epoch: 8	Loss: 1.7699251174926758	Top1 accuracy: 63.4765625
+DEBUG:root:Epoch: 9	Loss: 1.7523092031478882	Top1 accuracy: 64.84375
+DEBUG:root:Epoch: 10	Loss: 1.7803306579589844	Top1 accuracy: 65.0390625
+DEBUG:root:Epoch: 11	Loss: 1.5765446424484253	Top1 accuracy: 71.6796875
+DEBUG:root:Epoch: 12	Loss: 1.758866786956787	Top1 accuracy: 66.796875
+DEBUG:root:Epoch: 13	Loss: 1.7934942245483398	Top1 accuracy: 74.609375
+DEBUG:root:Epoch: 14	Loss: 1.5533332824707031	Top1 accuracy: 65.8203125
+DEBUG:root:Epoch: 15	Loss: 1.5164939165115356	Top1 accuracy: 75.5859375
+DEBUG:root:Epoch: 16	Loss: 1.27419912815094	Top1 accuracy: 68.9453125
+DEBUG:root:Epoch: 17	Loss: 1.3315625190734863	Top1 accuracy: 66.9921875
+DEBUG:root:Epoch: 18	Loss: 1.3891154527664185	Top1 accuracy: 73.6328125
+DEBUG:root:Epoch: 19	Loss: 1.6598963737487793	Top1 accuracy: 76.7578125
+DEBUG:root:Epoch: 20	Loss: 1.1420927047729492	Top1 accuracy: 71.875
+DEBUG:root:Epoch: 21	Loss: 1.4225108623504639	Top1 accuracy: 70.8984375
+DEBUG:root:Epoch: 22	Loss: 1.4375548362731934	Top1 accuracy: 76.171875
+DEBUG:root:Epoch: 23	Loss: 1.3852460384368896	Top1 accuracy: 68.5546875
+DEBUG:root:Epoch: 24	Loss: 1.1279940605163574	Top1 accuracy: 72.4609375
+DEBUG:root:Epoch: 25	Loss: 1.4539276361465454	Top1 accuracy: 76.3671875
+DEBUG:root:Epoch: 26	Loss: 1.160355567932129	Top1 accuracy: 76.3671875
+DEBUG:root:Epoch: 27	Loss: 0.9507343173027039	Top1 accuracy: 78.515625

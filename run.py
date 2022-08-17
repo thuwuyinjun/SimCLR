@@ -2,9 +2,11 @@ import argparse
 import torch
 import torch.backends.cudnn as cudnn
 from torchvision import models
-from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset
+from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset, subset_cifar
 from models.resnet_simclr import ResNetSimCLR
 from simclr import SimCLR
+from torch.utils.data import RandomSampler
+
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
@@ -52,6 +54,17 @@ parser.add_argument('--n-views', default=2, type=int, metavar='N',
 parser.add_argument('--gpu-index', default=0, type=int, help='Gpu index.')
 
 
+# args.output_dir
+
+parser.add_argument('--output_dir', default=None, type=str,
+                    help='initial learning rate')
+
+parser.add_argument('--meta_lr', default=20, type=float,
+                    help='initial learning rate')
+
+parser.add_argument('--meta', action='store_true',
+                    help='initial learning rate')
+
 def main():
     args = parser.parse_args()
     assert args.n_views == 2, "Only two view training is supported. Please use --n-views 2."
@@ -68,9 +81,22 @@ def main():
 
     train_dataset = dataset.get_dataset(args.dataset_name, args.n_views)
 
+    train_dataset, valid_dataset = subset_cifar(train_dataset)
+
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True, drop_last=True)
+
+
+    meta_sampler = RandomSampler(valid_dataset, replacement=True, num_samples=args.epochs*len(train_loader)*args.batch_size*10)
+
+    valid_loader = torch.utils.data.DataLoader(
+        valid_dataset, batch_size=args.batch_size, shuffle=(meta_sampler is None),pin_memory=True, sampler = meta_sampler)
+
+
+    # valid_loader = torch.utils.data.DataLoader(
+    #     valid_dataset, batch_size=args.batch_size, shuffle=True,
+    #     num_workers=args.workers, pin_memory=True, drop_last=True)
 
     model = ResNetSimCLR(base_model=args.arch, out_dim=args.out_dim)
 
@@ -82,7 +108,10 @@ def main():
     #  It’s a no-op if the 'gpu_index' argument is a negative integer or None.
     with torch.cuda.device(args.gpu_index):
         simclr = SimCLR(model=model, optimizer=optimizer, scheduler=scheduler, args=args)
-        simclr.train(train_loader)
+        if not args.meta:
+            simclr.train(train_loader)
+        else:
+            simclr.meta_train(train_loader, valid_loader)
 
 
 if __name__ == "__main__":

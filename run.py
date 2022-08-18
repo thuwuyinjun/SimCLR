@@ -3,7 +3,7 @@ import torch
 import torch.backends.cudnn as cudnn
 from torchvision import models
 from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset, subset_cifar
-from models.resnet_simclr import ResNetSimCLR
+from models.resnet_simclr import LeNet5, ResNetSimCLR
 from simclr import SimCLR
 from torch.utils.data import RandomSampler
 from tqdm import tqdm
@@ -18,9 +18,13 @@ parser = argparse.ArgumentParser(description='PyTorch SimCLR')
 parser.add_argument('-data', metavar='DIR', default='./datasets',
                     help='path to dataset')
 parser.add_argument('-dataset-name', default='stl10',
-                    help='dataset name', choices=['stl10', 'cifar10'])
+                    help='dataset name', choices=['stl10', 'cifar10','mnist'])
+# parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
+#                     choices=model_names,
+#                     help='model architecture: ' +
+#                          ' | '.join(model_names) +
+#                          ' (default: resnet50)')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
-                    choices=model_names,
                     help='model architecture: ' +
                          ' | '.join(model_names) +
                          ' (default: resnet50)')
@@ -59,6 +63,9 @@ parser.add_argument('--gpu-index', default=0, type=int, help='Gpu index.')
 # cached_model_name
 
 parser.add_argument('--cached_model_name', default=None, type=str,
+                    help='initial learning rate')
+
+parser.add_argument('--start_epoch', default=0, type=int,
                     help='initial learning rate')
 
 parser.add_argument('--test', action='store_true',
@@ -244,10 +251,16 @@ def main():
     #     valid_dataset, batch_size=args.batch_size, shuffle=True,
     #     num_workers=args.workers, pin_memory=True, drop_last=True)
 
-    model = ResNetSimCLR(base_model=args.arch, out_dim=args.out_dim)
+    if not args.arch == 'lenet5':
+        model = ResNetSimCLR(base_model=args.arch, out_dim=args.out_dim)
+    else:
+        model = LeNet5()
+
+    if args.cached_model_name is not None:
+        load_checkpoint(model, filename=args.cached_model_name)
 
     if args.test:
-        load_checkpoint(model, filename=args.cached_model_name)
+        
         args.num_classes = 10
         args.feature_dim = list(model.backbone.fc)[0].in_features
         model.backbone.fc = torch.nn.Identity()

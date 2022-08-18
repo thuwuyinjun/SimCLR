@@ -183,6 +183,19 @@ class ContrastiveLearningDataset:
         return data_transforms
 
     @staticmethod
+    def get_mnist_transform():
+        """Return a set of data augmentation transformations as described in the SimCLR paper."""
+        # color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
+        # data_transforms = transforms.Compose([transforms.RandomResizedCrop(size=size),
+        #                                       transforms.RandomHorizontalFlip(),
+        #                                       transforms.RandomApply([color_jitter], p=0.8),
+        #                                       transforms.RandomGrayscale(p=0.2),
+        #                                       GaussianBlur(kernel_size=int(0.1 * size)),
+        #                                       transforms.ToTensor()])
+        data_transforms = transforms.Compose([transforms.ToTensor()])
+        return data_transforms
+
+    @staticmethod
     def get_test_transform(size):
         """Return a set of data augmentation transformations as described in the SimCLR paper."""
         # color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
@@ -200,6 +213,12 @@ class ContrastiveLearningDataset:
                                                           transform=ContrastiveLearningViewGenerator(
                                                               self.get_simclr_pipeline_transform(96),
                                                               n_views),
+                                                          download=True),
+                                                          
+                           'mnist': lambda: datasets.MNIST(self.root_folder, train=True,
+                                                          transform=ContrastiveLearningViewGenerator(
+                                                              self.get_mnist_transform(),
+                                                              n_views),
                                                           download=True)}
 
         try:
@@ -214,7 +233,9 @@ class ContrastiveLearningDataset:
             elif name == 'stl10':
                 labels = return_dataset.labels
                 data = np.transpose(return_dataset.data, (0,2,3,1))
-
+            elif name == 'mnist':
+                labels = return_dataset.targets
+                data = return_dataset.data.numpy()
                 # data = np.copy(return_dataset.data)
 
 

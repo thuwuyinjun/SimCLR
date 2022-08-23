@@ -15,7 +15,35 @@ import torch_higher as higher
 torch.manual_seed(0)
 
 
+# joint_training
 
+class HiddenLayer(torch.nn.Module):
+    def __init__(self, input_size, output_size):
+        super(HiddenLayer, self).__init__()
+        self.fc = torch.nn.Linear(input_size, output_size)
+        self.relu = torch.nn.ReLU()
+
+    def forward(self, x):
+        return self.relu(self.fc(x))
+
+class MLP(torch.nn.Module):
+    def __init__(self, hidden_size=100, num_layers=1):
+        super(MLP, self).__init__()
+        self.first_hidden_layer = HiddenLayer(1, hidden_size)
+        self.rest_hidden_layers = torch.nn.Sequential(*[HiddenLayer(hidden_size, hidden_size) for _ in range(num_layers - 1)])
+        self.output_layer = torch.nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        x = self.first_hidden_layer(x)
+        x = self.rest_hidden_layers(x)
+        x = self.output_layer(x)
+        return torch.sigmoid(x)
+
+    def update_params(self, meta_weight_net_grad, learning_rate):
+        i = 0
+        for param in self.parameters():
+            param.data = param.data - learning_rate*meta_weight_net_grad[i].detach()
+            i += 1
 
 def obtain_model_grad(model):
     grad_ls = []
@@ -216,6 +244,11 @@ class SimCLR(object):
     
     def meta_train(self, train_loader, metaloader):
 
+        if self.args.method_two:
+            meta_weight_net = MLP()
+
+            meta_weight_net = meta_weight_net.to(self.args.device)
+
         scaler = GradScaler(enabled=self.args.fp16_precision)
 
         train_sample_count = len(train_loader.dataset)
@@ -252,16 +285,22 @@ class SimCLR(object):
                 w_array.requires_grad = True
 
                 with higher.innerloop_ctx(self.model, self.optimizer) as (meta_model, meta_opt):
-                    eps = w_array[:,train_ids]
-                    eps = eps.to(self.args.device)
+                    if not self.args.method_two:
+                        eps = w_array[:,train_ids]
+                        eps = eps.to(self.args.device)
 
                     with autocast(enabled=self.args.fp16_precision):
                         features = meta_model(images)
                         logits, _ = self.info_nce_loss(features)
                         self.criterion.reduction = 'none'
 
+                        
+                        loss = self.criterion(logits, labels)
 
-                        loss = torch.mean(self.criterion(logits, labels)*eps.view(-1))
+                        if self.args.method_two:
+                            eps = meta_weight_net(loss.view(-1,1))
+
+                        loss = torch.mean(loss.view(-1)*eps.view(-1))
 
                     meta_opt.step(loss)
 
@@ -293,21 +332,29 @@ class SimCLR(object):
                     # eps_grads2 = compute_meta_grad_efficient(meta_model, self, eps, self.model, images, labels, meta_images, labels, self.criterion, self.optimizer, self.args.lr)
 
                     # eps_grads2 = eps_grads2.reshape(self.args.n_views,-1)
-                    eps_grads = torch.autograd.grad(scaler.scale(meta_loss), eps)[0].detach()
+                    if self.args.method_two:
+                        meta_weight_net_grad = torch.autograd.grad(scaler.scale(meta_loss), meta_weight_net.parameters())
 
-                    w_array.requires_grad = False
-            
-                    # prev_w_array = w_array[train_ids].detach().clone()
+                        meta_weight_net.update_params(meta_weight_net_grad, self.args.meta_lr)
 
-                    w_array[:,train_ids] =  w_array[:,train_ids]-self.args.meta_lr*eps_grads
+                        del meta_weight_net_grad
+                    else:
+                        eps_grads = torch.autograd.grad(scaler.scale(meta_loss), eps)[0].detach()
 
-                    # print("max weight grad::", eps_grads.max().detach().cpu().item())
-                    # print("max weight::", w_array.max().detach().cpu().item())
-                    # print("min weight::", w_array.min().detach().cpu().item())
+                        w_array.requires_grad = False
+                
+                        # prev_w_array = w_array[train_ids].detach().clone()
+
+                        w_array[:,train_ids] =  w_array[:,train_ids]-self.args.meta_lr*eps_grads
+
+                        del eps_grads
+                        # print("max weight grad::", eps_grads.max().detach().cpu().item())
+                        # print("max weight::", w_array.max().detach().cpu().item())
+                        # print("min weight::", w_array.min().detach().cpu().item())
                     
-                    w_array[:,train_ids] = torch.clamp(w_array[:,train_ids], max=1, min=1e-7)
+                    # w_array[:,train_ids] = torch.clamp(w_array[:,train_ids], max=1, min=1e-7)
 
-                del eps, eps_grads, meta_images, meta_features, meta_logits,  meta_model
+                del eps, meta_images, meta_features, meta_logits,  meta_model
 
                 with autocast(enabled=self.args.fp16_precision):
                     features = self.model(images)
@@ -315,7 +362,15 @@ class SimCLR(object):
                     self.criterion.reduction = 'none'
 
 
-                    loss = torch.mean(self.criterion(logits, labels)*w_array[:,train_ids].view(-1))
+                    loss = self.criterion(logits, labels)
+
+                    if self.args.method_two:
+                        eps = meta_weight_net(loss.view(-1,1))
+
+                    else:
+                        eps = w_array[:,train_ids]
+                    loss = torch.mean(loss.view(-1)*eps.view(-1))
+
 
                 total_train_loss += loss.cpu().detach().item()
                 total_meta_loss += meta_loss.cpu().detach().item()

@@ -85,8 +85,10 @@ parser.add_argument('--meta', action='store_true',
 parser.add_argument('--joint_training', action='store_true',
                     help='initial learning rate')
 
+parser.add_argument('--method_two', action='store_true',
+                    help='initial learning rate')
 
-# joint_training
+
 
 def validate(test_loader, model, linear_classifier, criterion, epoch, args):
     model.eval()
